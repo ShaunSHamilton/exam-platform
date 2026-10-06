@@ -1,0 +1,26 @@
+{
+  "name": "web-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1 --port 13004",
+    "build": "astro check && astro build",
+    "preview": "astro preview --host 127.0.0.1 --port 13004",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/react": "catalog:astro",
+    "@tanstack/react-query": "catalog:",
+    "astro": "catalog:astro",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@astrojs/check": "catalog:astro",
+    "@tanstack/react-query-devtools": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:astro"
+  }
+}
