@@ -1,3 +1,38 @@
+# Rust workspace for the Axum services: aAPI, cAPI and eDd's server. One lockfile and one
+# target/. dApp's Tauri crate keeps its own workspace (apps/desktop-app/Cargo.toml) so server
+# builds never resolve Tauri or webkit dependencies.
 [workspace]
 resolver = "3"
-members = ["apps/*/api", "apps/*/server", "libs/*"]
+members = [
+  "apps/auth-api",
+  "apps/curriculum-api",
+  "apps/examiner-dashboard/server",
+  "libs/*",
+]
+exclude = ["apps/desktop-app"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[workspace.dependencies]
+axum = "0.8.9"
+tokio = { version = "1.53.2", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tower-http = { version = "0.7.1", features = ["trace"] }
+# TODO: Currently set to match `sentry` dep version. Nice, but not necessary.
+reqwest = { version = "0.13.5", default-features = false }
+sentry = { version = "0.49.3", default-features = false, features = [
+  "backtrace",
+  "contexts",
+  "debug-images",
+  "logs",
+  "panic",
+  "release-health",
+  "reqwest",
+  "rustls",
+  "tracing",
+] }
+runtime = { path = "libs/runtime" }
