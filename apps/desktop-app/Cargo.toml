@@ -1,0 +1,8 @@
+[workspace]
+members = ["backend"]
+resolver = "3"
+
+[profile.release]
+# File/line frames for symbolicating native panics, without shipping full debug info.
+debug = "line-tables-only"
+split-debuginfo = "packed"

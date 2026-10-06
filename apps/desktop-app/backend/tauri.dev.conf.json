@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "dev.freecodecamp.exam-platform",
+  "app": {
+    "windows": [
+      {
+        "title": "Exam Platform (dev)",
+        "label": "main",
+        "maximized": true,
+        "contentProtected": false
+      }
+    ]
+  }
+}

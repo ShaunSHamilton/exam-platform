@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "node_modules/.tmp/tsconfig.node",
+    "skipLibCheck": true,
+    "target": "ES2023",
+    "module": "ESNext",
+    "lib": ["ES2023"],
+    "moduleResolution": "bundler",
+    "types": ["bun"],
+    "strict": true
+  },
+  "include": ["vite.config.ts"]
+}
