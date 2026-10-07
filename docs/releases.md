@@ -57,15 +57,21 @@ Production is one DigitalOcean Droplet running Komodo, Caddy and the app stacks 
 - Stacks `exam-platform-<app>` on server `exam-platform`. Each runs `apps/<app>/compose.yaml` from `main`, the same file developers run locally, with `IMAGE` set to the release digest. Komodo pulls the image first, and `--no-build` keeps compose from building `main` instead.
 - All stacks join network `platform`, which `pre_deploy` creates if missing. Caddy reaches the public apps there by alias.
 - `compose up --wait --wait-timeout 120`: a container that does not turn healthy fails the deploy.
-- Action `exam-platform-deploy` sets `EXAM_PLATFORM_<APP>_IMAGE` and deploys the stack. On success it keeps the replaced digest in `EXAM_PLATFORM_<APP>_IMAGE_PREVIOUS`. On failure it redeploys the replaced digest, and the workflow still fails.
+- Action `exam-platform-deploy` keeps three Variables per app:
+  - `EXAM_PLATFORM_<APP>_IMAGE`: what the stack's environment runs. Set before each deploy, so it may hold an image that never turned healthy.
+  - `EXAM_PLATFORM_<APP>_IMAGE_HEALTHY`: the last image a deploy confirmed healthy. Set only after Komodo reports the deploy succeeded.
+  - `EXAM_PLATFORM_<APP>_IMAGE_PREVIOUS`: the healthy image before that one, for `previous`.
+- The Action decides from Komodo's record of the deploy, not from its own requests. It retries reads and Variable writes, keeps polling through errors, and looks the deploy up when the request itself failed.
+  - Unhealthy, or never started: it redeploys `_IMAGE_HEALTHY`, and the workflow still fails.
+  - No result within 420s: it fails without rolling back, since the deploy may still be running or may have succeeded. Check the stack in Komodo.
 - Only admins can write Komodo Variables. The Action runs as Komodo's admin Action user, so the CI key holds Execute on that Action and nothing else (user group `exam-platform-ci`).
 - Runtime secrets are Komodo secret Variables, interpolated into stack environments at deploy. They never reach images or this repository.
 - Procedure `exam-platform-prune-images` removes unused images every Sunday. A rollback pulls its image from DOCR again.
 
 Rollback:
 
-- Actions → Deploy → Run workflow, with the app and `previous`, or with any digest from a release's **Image** line. `previous` swaps current and previous.
-- Without GitHub: set `EXAM_PLATFORM_<APP>_IMAGE` in Komodo, then deploy the stack.
+- Actions → Deploy → Run workflow, with the app and `previous`, or with any digest from a release's **Image** line. `previous` deploys `_IMAGE_PREVIOUS`, and on success swaps it with `_IMAGE_HEALTHY`.
+- Without GitHub: set `EXAM_PLATFORM_<APP>_IMAGE` in Komodo, then deploy the stack. Once it is healthy, set `_IMAGE_HEALTHY` to the same digest: the next failed deploy rolls back to it. Komodo runs Actions from the UI without arguments, so the Action cannot do this.
 - Stacks read `compose.yaml` from `main`, so a rollback runs the old image with the current compose file: see [Rollback across compose changes](#rollback-across-compose-changes).
 
 ## Setup

@@ -73,7 +73,7 @@ jobs:
           id=$(jq -er '._id."$oid"' <<<"$started")
           echo "Komodo update $id"
 
-          # A rollout and its rollback each wait up to 120s for healthy containers.
+          # The Action gives a rollout and its rollback up to 420s each.
           deadline=$((SECONDS + 1200))
           while :; do
             update=$(komodo /read/GetUpdate "$(jq -nc --arg id "$id" '{id: $id}')" --retry 3)

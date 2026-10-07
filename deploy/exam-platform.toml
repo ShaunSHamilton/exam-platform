@@ -99,9 +99,13 @@ IMAGE=
 """
 # Komodo interpolates variables into this script, so it must never contain two opening brackets in a row.
 file_contents = '''
-// Deploys one app by image digest and keeps the digest it replaces, for rollback. ARGS:
+// Deploys one app by image digest. ARGS:
 //   APP    auth-api | curriculum-api | examiner-dashboard | web-app
 //   IMAGE  registry.digitalocean.com/<registry>/<APP>@sha256:<digest>, or `previous`
+// Variables per app, EXAM_PLATFORM_<APP>_:
+//   IMAGE           what the stack runs. Set before each deploy, so it may be unhealthy.
+//   IMAGE_HEALTHY   the last image a deploy confirmed healthy: the rollback target.
+//   IMAGE_PREVIOUS  the healthy image before it, for `previous`.
 // Only admins may write Variables. The Action user is one, so CI needs Execute on this Action only.
 // Komodo interpolates ARGS before the script runs: never echo them unvalidated.
 const APPS = ["auth-api", "curriculum-api", "examiner-dashboard", "web-app"];
@@ -110,59 +114,123 @@ if (!APPS.includes(app)) throw new Error(`APP must be one of ${APPS.join(", ")}`
 
 const stack = `exam-platform-${app}`;
 const current = `EXAM_PLATFORM_${app.toUpperCase().replaceAll("-", "_")}_IMAGE`;
+const healthy = `${current}_HEALTHY`;
 const previous = `${current}_PREVIOUS`;
+// Komodo pulls the image, then compose waits up to 120s for healthy containers.
+const DEPLOY_SECONDS = 420;
+// How long a DeployStack request that errored may take to show up as an Update.
+const START_SECONDS = 30;
 
-// Komodo answers a missing Variable with an error.
-async function get(name: string): Promise<string | undefined> {
-  try {
-    return (await komodo.read("GetVariable", { name })).value;
-  } catch {
-    return undefined;
+const sleep = (seconds: number) => new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+const describe = (err: unknown) => (err as { result?: { error?: string } })?.result?.error ?? String(err);
+
+// For reads and idempotent writes: rides out a Core restart or a dropped connection.
+async function retry<T>(what: string, call: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await call();
+    } catch (err) {
+      if (attempt === 4) throw new Error(`${what} failed: ${describe(err)}`);
+      await sleep(2 ** attempt);
+    }
   }
+}
+
+// Lists Variables rather than reading one: a failed read throws instead of passing for a missing Variable.
+async function variables(): Promise<Map<string, string>> {
+  const list = await retry("ListVariables", () => komodo.read("ListVariables", {}));
+  return new Map(list.map((v) => [v.name, v.value ?? ""]));
 }
 
 async function set(name: string, value: string) {
-  if ((await get(name)) === undefined) {
-    const description = `Image ${stack} runs. Written by the exam-platform-deploy Action.`;
-    await komodo.write("CreateVariable", { name, value, description });
-  } else {
-    await komodo.write("UpdateVariableValue", { name, value });
-  }
+  // Checks existence on every attempt: a create whose response was lost has still created it.
+  await retry(`Writing ${name}`, async () => {
+    if ((await komodo.read("ListVariables", {})).some((v) => v.name === name)) {
+      await komodo.write("UpdateVariableValue", { name, value });
+    } else {
+      const description = `Image for ${stack}. Written by the exam-platform-deploy Action.`;
+      await komodo.write("CreateVariable", { name, value, description });
+    }
+  });
 }
 
-async function deploy(image: string): Promise<boolean> {
+const deploying = async () => (await komodo.read("GetStackActionState", { stack })).deploying;
+
+// The first DeployStack Update for the stack since `since`, if Core has created one.
+async function findDeploy(stackId: string, since: number): Promise<string | undefined> {
+  const query = { "target.type": "Stack", "target.id": stackId, operation: "DeployStack", start_ts: { $gte: since } };
+  return (await komodo.read("ListUpdates", { query })).updates.at(-1)?.id;
+}
+
+// Points the stack at `image` and deploys it. Settles on Komodo's record of the deploy, never on a
+// request's error: a request that failed may still have started it, and a poll that failed says
+// nothing about it. "unknown": the deploy did not finish in time, or its record could not be read.
+async function deploy(stackId: string, image: string): Promise<"healthy" | "failed" | "unknown"> {
   await set(current, image);
-  const update = (await komodo.execute_and_poll("DeployStack", { stack })) as Types.Update;
-  for (const log of update.logs) {
-    if (!log.success) console.error(`${log.stage}:\n${log.stderr || log.stdout}`);
+  const since = Date.now();
+  let id: string | undefined;
+  try {
+    id = (await komodo.execute("DeployStack", { stack }))._id?.$oid;
+  } catch (err) {
+    console.error(`DeployStack request failed, looking for the deploy: ${describe(err)}`);
   }
-  return update.success;
+  const deadline = since + DEPLOY_SECONDS * 1000;
+  while (Date.now() < deadline) {
+    await sleep(3);
+    try {
+      id ??= await findDeploy(stackId, since);
+      if (!id) {
+        // Core creates the Update before it answers: none by now means the request never arrived.
+        if (Date.now() - since > START_SECONDS * 1000 && !(await deploying())) return "failed";
+        continue;
+      }
+      const update = await komodo.read("GetUpdate", { id });
+      if (update.status !== "Complete") continue;
+      for (const log of update.logs) {
+        if (!log.success) console.error(`${log.stage}:\n${log.stderr || log.stdout}`);
+      }
+      return update.success ? "healthy" : "failed";
+    } catch (err) {
+      console.error(`Polling the deploy of ${stack}: ${describe(err)}`);
+    }
+  }
+  return "unknown";
 }
 
+const vars = await variables();
 const requested = String(ARGS.IMAGE);
-const image = requested === "previous" ? await get(previous) : requested;
+const image = requested === "previous" ? vars.get(previous) : requested;
 if (requested === "previous" && !image) throw new Error(`No previous image recorded for ${stack}`);
 const digest = new RegExp(`^registry\\.digitalocean\\.com/[a-z0-9-]+/${app}@sha256:[0-9a-f]{64}$`);
 if (!image || !digest.test(image)) {
   throw new Error(`IMAGE must be registry.digitalocean.com/<registry>/${app}@sha256:<digest>, or previous`);
 }
-if ((await komodo.read("GetStackActionState", { stack })).deploying) {
-  throw new Error(`${stack} is already deploying`);
-}
+const stackId = (await retry("GetStack", () => komodo.read("GetStack", { stack })))._id?.$oid;
+if (!stackId) throw new Error(`${stack} has no id`);
+if (await retry("GetStackActionState", deploying)) throw new Error(`${stack} is already deploying`);
 
-const deployed = (await get(current)) || undefined;
-if (await deploy(image)) {
-  if (deployed && deployed !== image) await set(previous, deployed);
+const restore = vars.get(healthy) || undefined;
+const outcome = await deploy(stackId, image);
+if (outcome === "healthy") {
+  try {
+    await set(healthy, image);
+    if (restore && restore !== image) await set(previous, restore);
+  } catch (err) {
+    throw new Error(`${stack} runs ${image}, but recording it failed: set ${healthy} by hand. ${err}`);
+  }
   console.log(`${stack} runs ${image}`);
-} else if (deployed && deployed !== image) {
-  const restored = await deploy(deployed);
+} else if (outcome === "unknown") {
+  // Rolling back now could overlap a deploy still running, or undo one that succeeded.
+  throw new Error(`No result for the deploy of ${image} to ${stack}: not rolled back. Check the stack in Komodo.`);
+} else if (!restore || restore === image) {
+  throw new Error(`Deploy failed: ${stack} has no other healthy image to roll back to`);
+} else {
+  const restored = await deploy(stackId, restore);
   throw new Error(
-    restored
-      ? `Deploy failed: ${stack} rolled back to ${deployed}`
+    restored === "healthy"
+      ? `Deploy failed: ${stack} rolled back to ${restore}`
       : `Deploy and rollback failed: ${stack} needs attention`,
   );
-} else {
-  throw new Error(`Deploy failed: ${stack} had no earlier image to roll back to`);
 }
 '''
 
