@@ -1,0 +1,22 @@
+# Run from this directory: `docker compose up --build`. Build context is the repo root.
+services:
+  examiner-dashboard:
+    build:
+      context: ../..
+      dockerfile: apps/examiner-dashboard/Dockerfile
+    restart: unless-stopped
+    ports: ["127.0.0.1:${EDD_PORT:-13003}:13003"]
+    environment:
+      LISTEN_ADDR: 0.0.0.0:13003
+      ENVIRONMENT: ${ENVIRONMENT:?set ENVIRONMENT to development, staging or production}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.2}
+      RUST_LOG: ${RUST_LOG:-info}
+      WEB_DIR: /app/web
+    networks:
+      platform:
+        aliases: [examiner-dashboard]
+networks:
+  platform:
+    name: ${PLATFORM_NETWORK:-platform}
+    external: true
