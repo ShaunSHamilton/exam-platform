@@ -1,0 +1,25 @@
+[package]
+name = "runtime"
+version = "0.1.0"
+description = "Shared bootstrap for Rust bins: environment, tracing + Sentry, and (feature `server`) Axum serving"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = ["server"]
+server = [
+  "dep:axum",
+  "dep:tokio",
+  "dep:tower-http",
+  "sentry/tower-axum-matched-path",
+]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+reqwest.workspace = true
+sentry.workspace = true
+tokio = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+tracing.workspace = true
+tracing-subscriber.workspace = true
