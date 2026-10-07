@@ -1,4 +1,6 @@
 [toolchain]
-# Not forcing for now. See Cargo.toml for msrv
-# channel = "1.99.0"
+# Any stable, never a pinned version: rustup uses the stable toolchain already installed (in CI,
+# the runner image's) and installs the newest only when none is. Images build on rust:1. The
+# shared floor is `rust-version` in Cargo.toml.
+channel = "stable"
 components = ["clippy", "rustfmt"]

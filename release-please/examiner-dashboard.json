@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/v17.6.0/schemas/config.json",
+  "release-type": "simple",
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "bump-minor-pre-major": true,
+  "initial-version": "0.1.0",
+  "packages": {
+    ".": {
+      "component": "examiner-dashboard",
+      "changelog-path": "apps/examiner-dashboard/CHANGELOG.md",
+      "exclude-paths": [
+        ".github",
+        ".vscode",
+        "apps/auth-api",
+        "apps/curriculum-api",
+        "apps/desktop-app",
+        "apps/web-app",
+        "databases",
+        "deploy",
+        "docs",
+        "release-please"
+      ],
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "apps/examiner-dashboard/server/Cargo.toml",
+          "jsonpath": "$.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==='examiner-dashboard')].version"
+        },
+        {
+          "type": "json",
+          "path": "apps/examiner-dashboard/client/package.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}

@@ -1,6 +1,6 @@
 name: Release
 
-# release-please keeps one release PR per app open (release-please-config.json). Merging one
+# release-please keeps one release PR per app open (release-please/<app>.json). Merging one
 # creates the GitHub release here, and the same run builds and deploys it: releases created with
 # GITHUB_TOKEN trigger no other workflows.
 
@@ -27,34 +27,70 @@ jobs:
       images: ${{ steps.plan.outputs.images }}
       desktop: ${{ steps.plan.outputs.desktop }}
     steps:
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
-        id: release
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           sparse-checkout: apps
+      # One config per app, each a root package minus `exclude-paths`: a shared change releases
+      # every app that does not exclude it. Step ids are app names. continue-on-error keeps one
+      # app's failure from hiding the releases the others created; the last step fails the job.
+      - id: auth-api
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        continue-on-error: true
+        with:
+          config-file: release-please/auth-api.json
+          manifest-file: release-please/auth-api.manifest.json
+      - id: curriculum-api
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        continue-on-error: true
+        with:
+          config-file: release-please/curriculum-api.json
+          manifest-file: release-please/curriculum-api.manifest.json
+      - id: examiner-dashboard
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        continue-on-error: true
+        with:
+          config-file: release-please/examiner-dashboard.json
+          manifest-file: release-please/examiner-dashboard.manifest.json
+      - id: web-app
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        continue-on-error: true
+        with:
+          config-file: release-please/web-app.json
+          manifest-file: release-please/web-app.manifest.json
+      - id: desktop-app
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        continue-on-error: true
+        with:
+          config-file: release-please/desktop-app.json
+          manifest-file: release-please/desktop-app.manifest.json
       # Apps with a Dockerfile ship as images; desktop-app ships Tauri bundles.
       - id: plan
         env:
-          OUTPUTS: ${{ toJSON(steps.release.outputs) }}
+          STEPS: ${{ toJSON(steps) }}
         run: |
-          releases=$(jq -c '. as $out | .paths_released | fromjson | map({
-            app: (split("/") | last),
-            version: $out[. + "--version"],
-            tag: $out[. + "--tag_name"],
-            sha: $out[. + "--sha"]
-          })' <<<"$OUTPUTS")
+          releases=$(jq -c '[to_entries[] | .key as $app | .value.outputs
+            | select(.release_created == "true")
+            | {app: $app, version, tag: .tag_name, sha}]' <<<"$STEPS")
           docker=$(find apps -mindepth 2 -maxdepth 2 -name Dockerfile | cut -d/ -f2 | jq -Rnc '[inputs]')
           echo "images=$(jq -c --argjson docker "$docker" 'map(select(.app | IN($docker[])))' <<<"$releases")" >> "$GITHUB_OUTPUT"
           echo "desktop=$(jq -c 'map(select(.app == "desktop-app"))' <<<"$releases")" >> "$GITHUB_OUTPUT"
+      - name: Check release-please
+        env:
+          STEPS: ${{ toJSON(steps) }}
+        run: |
+          failed=$(jq -r '[to_entries[] | select(.value.outcome == "failure") | .key] | join(", ")' <<<"$STEPS")
+          if [[ -n $failed ]]; then
+            echo "::error::release-please failed for $failed. Re-run this job once fixed."
+            exit 1
+          fi
 
   container:
     name: ${{ matrix.release.app }} ${{ matrix.release.version }}
     needs: release-please
-    if: needs.release-please.outputs.images != '[]'
+    # Also after a failed release-please job: builds what the other apps released. Empty when
+    # the job failed before planning.
+    if: ${{ !cancelled() && needs.release-please.outputs.images != '' && needs.release-please.outputs.images != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -76,7 +112,7 @@ jobs:
   desktop:
     name: desktop-app
     needs: release-please
-    if: needs.release-please.outputs.desktop != '[]'
+    if: ${{ !cancelled() && needs.release-please.outputs.desktop != '' && needs.release-please.outputs.desktop != '[]' }}
     runs-on: ubuntu-slim
     permissions: {}
     steps:

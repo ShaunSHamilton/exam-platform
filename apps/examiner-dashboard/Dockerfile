@@ -14,7 +14,8 @@ COPY apps/examiner-dashboard/client apps/examiner-dashboard/client
 RUN bun --filter examiner-dashboard-client build
 
 # Server: every Rust workspace member manifest must be present for cargo to load the workspace.
-FROM rust:1.99.0-slim-trixie AS build
+# rust:1 is the newest stable at build time; Cargo.toml's rust-version is the floor.
+FROM rust:1-slim-trixie AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY apps/auth-api apps/auth-api

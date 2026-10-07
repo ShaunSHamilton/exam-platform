@@ -1,11 +1,12 @@
-# Komodo Resource Sync for the exam platform's single environment. Setup: docs/releases.md.
+# Komodo Resource Sync for the exam platform's single environment. Setup: deploy/README.md.
 #
 # Sync settings: this file on `main`, include_user_groups = true, include_variables = false.
 # Variables stay out of the sync: the deploy Action moves EXAM_PLATFORM_*_IMAGE on every deploy,
 # and secrets are created by hand in Komodo, so a sync would revert or blank them.
 #
-# Stacks pull compose.deploy.yaml from `main` and only deploy when GitHub Actions runs the
-# exam-platform-deploy Action: `deploy = false`, no webhooks, no polling.
+# Stacks run each app's compose.yaml from `main`, the file developers run locally, with IMAGE set
+# to a release digest. They only deploy when GitHub Actions runs the exam-platform-deploy Action:
+# `deploy = false`, no webhooks, no polling.
 
 [[stack]]
 name = "exam-platform-auth-api"
@@ -16,17 +17,17 @@ server = "exam-platform"
 repo = "freeCodeCamp/exam-platform"
 branch = "main"
 run_directory = "apps/auth-api"
-file_paths = ["compose.deploy.yaml"]
+file_paths = ["compose.yaml"]
 registry_provider = "registry.digitalocean.com"
 registry_account = "exam-platform"
-pre_deploy.command = "docker network inspect exam-platform-production >/dev/null 2>&1 || docker network create exam-platform-production"
-# Fails the deploy, and so triggers the Action's rollback, unless every container turns healthy.
-extra_args = ["--wait", "--wait-timeout", "120"]
+pre_deploy.command = "docker network inspect platform >/dev/null 2>&1 || docker network create platform"
+# Komodo pulls IMAGE first (auto_pull); --no-build stops compose falling back to building main.
+# --wait fails the deploy, and so triggers the Action's rollback, unless every container turns healthy.
+extra_args = ["--no-build", "--wait", "--wait-timeout", "120"]
 environment = """
 IMAGE=[[EXAM_PLATFORM_AUTH_API_IMAGE]]
 ENVIRONMENT=production
 SENTRY_DSN=[[EXAM_PLATFORM_AUTH_API_SENTRY_DSN]]
-PLATFORM_NETWORK=exam-platform-production
 """
 
 [[stack]]
@@ -38,16 +39,15 @@ server = "exam-platform"
 repo = "freeCodeCamp/exam-platform"
 branch = "main"
 run_directory = "apps/curriculum-api"
-file_paths = ["compose.deploy.yaml"]
+file_paths = ["compose.yaml"]
 registry_provider = "registry.digitalocean.com"
 registry_account = "exam-platform"
-pre_deploy.command = "docker network inspect exam-platform-production >/dev/null 2>&1 || docker network create exam-platform-production"
-extra_args = ["--wait", "--wait-timeout", "120"]
+pre_deploy.command = "docker network inspect platform >/dev/null 2>&1 || docker network create platform"
+extra_args = ["--no-build", "--wait", "--wait-timeout", "120"]
 environment = """
 IMAGE=[[EXAM_PLATFORM_CURRICULUM_API_IMAGE]]
 ENVIRONMENT=production
 SENTRY_DSN=[[EXAM_PLATFORM_CURRICULUM_API_SENTRY_DSN]]
-PLATFORM_NETWORK=exam-platform-production
 """
 
 [[stack]]
@@ -59,16 +59,15 @@ server = "exam-platform"
 repo = "freeCodeCamp/exam-platform"
 branch = "main"
 run_directory = "apps/examiner-dashboard"
-file_paths = ["compose.deploy.yaml"]
+file_paths = ["compose.yaml"]
 registry_provider = "registry.digitalocean.com"
 registry_account = "exam-platform"
-pre_deploy.command = "docker network inspect exam-platform-production >/dev/null 2>&1 || docker network create exam-platform-production"
-extra_args = ["--wait", "--wait-timeout", "120"]
+pre_deploy.command = "docker network inspect platform >/dev/null 2>&1 || docker network create platform"
+extra_args = ["--no-build", "--wait", "--wait-timeout", "120"]
 environment = """
 IMAGE=[[EXAM_PLATFORM_EXAMINER_DASHBOARD_IMAGE]]
 ENVIRONMENT=production
 SENTRY_DSN=[[EXAM_PLATFORM_EXAMINER_DASHBOARD_SENTRY_DSN]]
-PLATFORM_NETWORK=exam-platform-production
 """
 
 [[stack]]
@@ -80,14 +79,13 @@ server = "exam-platform"
 repo = "freeCodeCamp/exam-platform"
 branch = "main"
 run_directory = "apps/web-app"
-file_paths = ["compose.deploy.yaml"]
+file_paths = ["compose.yaml"]
 registry_provider = "registry.digitalocean.com"
 registry_account = "exam-platform"
-pre_deploy.command = "docker network inspect exam-platform-production >/dev/null 2>&1 || docker network create exam-platform-production"
-extra_args = ["--wait", "--wait-timeout", "120"]
+pre_deploy.command = "docker network inspect platform >/dev/null 2>&1 || docker network create platform"
+extra_args = ["--no-build", "--wait", "--wait-timeout", "120"]
 environment = """
 IMAGE=[[EXAM_PLATFORM_WEB_APP_IMAGE]]
-PLATFORM_NETWORK=exam-platform-production
 """
 
 [[action]]

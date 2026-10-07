@@ -1,8 +1,13 @@
-# Run from this directory: `docker compose up --build`. Build context is the repo root.
+# Local: `docker compose up --build` from this directory; the build context is the repo root.
+# Production runs this same file: Komodo stack `exam-platform-web-app`
+# (deploy/exam-platform.toml) sets IMAGE to a release digest and never builds. Keep
+# machine-specific values in .env.
 # Services address each other over the shared `platform` network; create it once with
 # `docker network create platform`.
 services:
   web-app:
+    # Unset: compose builds from source and names the image itself.
+    image: ${IMAGE:-}
     build:
       context: ../..
       dockerfile: apps/web-app/Dockerfile

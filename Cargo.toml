@@ -13,6 +13,9 @@ exclude = ["apps/desktop-app"]
 
 [workspace.package]
 edition = "2024"
+# Floor for "any stable" (rust-toolchain.toml): keep it at or below every environment's stable.
+# Resolver 3 prefers dependency versions that build on it, so a newer local toolchain does not
+# lock in crates the CI runner's cannot build.
 rust-version = "1.95"
 publish = false
 

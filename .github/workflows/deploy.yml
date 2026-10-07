@@ -1,6 +1,6 @@
 name: Deploy
 
-# Runs Komodo's exam-platform-deploy Action (deploy/komodo/exam-platform.toml): points the app's
+# Runs Komodo's exam-platform-deploy Action (deploy/exam-platform.toml): points the app's
 # stack at one image digest, keeps the digest it replaces, and rolls back if containers do not
 # turn healthy. Called after each release (release-container.yml); dispatch by hand to redeploy
 # a release's image or roll back with `previous`.

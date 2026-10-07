@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/v17.6.0/schemas/config.json",
+  "release-type": "simple",
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "bump-minor-pre-major": true,
+  "initial-version": "0.1.0",
+  "packages": {
+    ".": {
+      "component": "desktop-app",
+      "changelog-path": "apps/desktop-app/CHANGELOG.md",
+      "exclude-paths": [
+        ".github",
+        ".vscode",
+        "apps/auth-api",
+        "apps/curriculum-api",
+        "apps/examiner-dashboard",
+        "apps/web-app",
+        "databases",
+        "deploy",
+        "docs",
+        "release-please"
+      ],
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "apps/desktop-app/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "toml",
+          "path": "apps/desktop-app/backend/Cargo.toml",
+          "jsonpath": "$.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "apps/desktop-app/Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==='desktop-app')].version"
+        }
+      ]
+    }
+  }
+}

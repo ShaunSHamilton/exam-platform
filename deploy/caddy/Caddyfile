@@ -1,0 +1,14 @@
+# The Droplet's public entry. Caddy gets a Let's Encrypt certificate for each name and redirects
+# HTTP to HTTPS. Names come from .env; apps are reached on the `platform` network by alias.
+# A new public app: add its name to .env.example and the caddy service's environment, add a
+# block here, then re-run bootstrap.sh.
+
+{$KOMODO_DOMAIN} {
+	# Periphery connects to Core inside the compose network. No remote agent should.
+	respond /ws/periphery 404
+	reverse_proxy core:9120
+}
+
+{$EXAMINER_DASHBOARD_DOMAIN} {
+	reverse_proxy examiner-dashboard:13003
+}

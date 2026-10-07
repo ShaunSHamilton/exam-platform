@@ -31,20 +31,24 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Shared inputs reach an app through its inputs.lock, so `apps/<app>/**` covers them.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           filters: |
             ci: &ci
               - .github/workflows/ci.yml
-            rust:
-              - *ci
+            cargo: &cargo
               - Cargo.toml
               - Cargo.lock
+              - libs/**
+            bun-lock: &bun-lock
+              - package.json
+              - bun.lock
+            rust:
+              - *ci
+              - *cargo
               - rust-toolchain.toml
               - rustfmt.toml
-              - libs/**
               - apps/auth-api/**
               - apps/curriculum-api/**
               - apps/examiner-dashboard/server/**
@@ -57,15 +61,15 @@ jobs:
               - apps/desktop-app/**
             bun:
               - *ci
-              - package.json
-              - bun.lock
+              - *bun-lock
               - apps/web-app/**
               - apps/examiner-dashboard/client/**
               - apps/desktop-app/**
-            auth-api: [*ci, apps/auth-api/**]
-            curriculum-api: [*ci, apps/curriculum-api/**]
-            examiner-dashboard: [*ci, apps/examiner-dashboard/**]
-            web-app: [*ci, apps/web-app/**]
+            # Images: the app, plus what its Dockerfile copies from outside it.
+            auth-api: [*ci, *cargo, .dockerignore, apps/auth-api/**]
+            curriculum-api: [*ci, *cargo, .dockerignore, apps/curriculum-api/**]
+            examiner-dashboard: [*ci, *cargo, *bun-lock, .dockerignore, apps/examiner-dashboard/**]
+            web-app: [*ci, *bun-lock, .dockerignore, apps/web-app/**]
       - id: images
         env:
           CHANGES: ${{ steps.filter.outputs.changes }}
@@ -74,28 +78,6 @@ jobs:
             if [[ -f "apps/$app/Dockerfile" ]]; then echo "$app"; fi
           done | jq -Rnc '[inputs]')
           echo "images=$images" >> "$GITHUB_OUTPUT"
-
-  inputs:
-    name: Release inputs
-    runs-on: ubuntu-26.04
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # No `toolchain` input, and rust-toolchain.toml sets no channel: the runner image's Rust, never newer.
-      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
-        with:
-          cache-workspaces: |
-            .
-            apps/desktop-app
-          cache-targets: false
-          cache-save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - run: bun run inputs --check
 
   rust:
     name: Rust
@@ -108,7 +90,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # No `toolchain` input, and rust-toolchain.toml sets no channel: the runner image's Rust, never newer.
+      # No `toolchain` input: rust-toolchain.toml's `stable` resolves to the runner image's toolchain, never a newer one.
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
           cache-save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -136,7 +118,7 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev
-      # No `toolchain` input, and rust-toolchain.toml sets no channel: the runner image's Rust, never newer.
+      # No `toolchain` input: rust-toolchain.toml's `stable` resolves to the runner image's toolchain, never a newer one.
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
           cache-workspaces: apps/desktop-app
@@ -182,7 +164,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      # Build only. Release builds push from the same Dockerfile and cache scope (release.yml).
+      # Build only. Release builds push from the same Dockerfile and cache scope (release-container.yml).
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -195,7 +177,7 @@ jobs:
   pass:
     name: CI passed
     if: always()
-    needs: [changes, inputs, rust, desktop, bun, docker]
+    needs: [changes, rust, desktop, bun, docker]
     runs-on: ubuntu-slim
     permissions: {}
     steps:

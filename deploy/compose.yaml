@@ -1,8 +1,8 @@
-# Komodo on the app VM: MongoDB, Core, Periphery, and Caddy for TLS. Adapted from Komodo's
-# compose/mongo.compose.yaml (v2.3.3). Install, setup and maintenance: README.md.
+# The Droplet's own services: Komodo (MongoDB, Core, Periphery), and Caddy, the public entry for
+# Komodo and the apps. Adapted from Komodo's compose/mongo.compose.yaml (v2.3.3). Setup: README.md.
 #
-# Run by hand from this directory, never as a Komodo stack: redeploying Core from Core cuts
-# off the deploy halfway. Secrets come from .env (see .env.example), which stays on the VM.
+# bootstrap.sh runs it. Never deploy it as a Komodo stack: redeploying Core from Core cuts off the
+# deploy halfway. Hosts and secrets come from .env (see .env.example), which stays on the Droplet.
 name: komodo
 
 services:
@@ -25,7 +25,7 @@ services:
     init: true
     restart: unless-stopped
     depends_on: [mongo]
-    # The UI is reached through an SSH tunnel; Caddy is the only public entry.
+    # Caddy is the way in. This is the fallback while Caddy is down: ssh -L 9120:127.0.0.1:9120.
     ports: ["127.0.0.1:9120:9120"]
     environment:
       KOMODO_HOST: https://${KOMODO_DOMAIN:?set in .env}
@@ -35,11 +35,15 @@ services:
       KOMODO_DATABASE_PASSWORD: ${KOMODO_DATABASE_PASSWORD}
       KOMODO_JWT_SECRET: ${KOMODO_JWT_SECRET:?set in .env}
       KOMODO_WEBHOOK_SECRET: ${KOMODO_WEBHOOK_SECRET:?set in .env}
-      # The first account to sign up becomes super admin. Later sign-ups stay disabled until an
-      # admin enables them, and only the SSH tunnel reaches the form.
+      # The login page is public. The first start creates the admin from .env; nobody can sign up.
+      # Admins add users under Settings → Users, and everyone turns on passkey or TOTP 2FA.
       KOMODO_LOCAL_AUTH: "true"
-      KOMODO_ENABLE_NEW_USERS: "false"
+      KOMODO_INIT_ADMIN_USERNAME: ${KOMODO_INIT_ADMIN_USERNAME:?set in .env}
+      KOMODO_INIT_ADMIN_PASSWORD: ${KOMODO_INIT_ADMIN_PASSWORD:?set in .env}
+      KOMODO_DISABLE_USER_REGISTRATION: "true"
+      KOMODO_MIN_PASSWORD_LENGTH: "16"
       KOMODO_DISABLE_NON_ADMIN_CREATE: "true"
+      KOMODO_CORS_ALLOWED_ORIGINS: https://${KOMODO_DOMAIN}
       # The co-located Periphery: the server the stacks in exam-platform.toml target.
       KOMODO_FIRST_SERVER_NAME: exam-platform
       KOMODO_PERIPHERY_PUBLIC_KEY: file:/config/keys/periphery.pub
@@ -77,10 +81,20 @@ services:
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       KOMODO_DOMAIN: ${KOMODO_DOMAIN}
+      EXAMINER_DASHBOARD_DOMAIN: ${EXAMINER_DASHBOARD_DOMAIN:?set in .env}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The directory, not the file: `git pull` replaces the file, and `caddy reload` must see it.
+      - ./caddy:/etc/caddy:ro
       - caddy-data:/data
       - caddy-config:/config
+    # default reaches Core; platform reaches the apps by their network aliases.
+    networks: [default, platform]
+
+networks:
+  # The apps' shared network (apps/*/compose.yaml). bootstrap.sh creates it.
+  platform:
+    name: platform
+    external: true
 
 volumes:
   mongo-data:
