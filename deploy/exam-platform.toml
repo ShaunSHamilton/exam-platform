@@ -14,7 +14,7 @@ description = "aAPI: candidate identity and the attempt path"
 tags = ["exam-platform"]
 [stack.config]
 server = "exam-platform"
-repo = "freeCodeCamp/exam-platform"
+repo = "ShaunSHamilton/exam-platform"
 branch = "main"
 run_directory = "apps/auth-api"
 file_paths = ["compose.yaml"]
@@ -36,7 +36,7 @@ description = "cAPI: sole holder of cDb credentials"
 tags = ["exam-platform"]
 [stack.config]
 server = "exam-platform"
-repo = "freeCodeCamp/exam-platform"
+repo = "ShaunSHamilton/exam-platform"
 branch = "main"
 run_directory = "apps/curriculum-api"
 file_paths = ["compose.yaml"]
@@ -56,7 +56,7 @@ description = "eDd: examiner authoring, review, promotion and moderation"
 tags = ["exam-platform"]
 [stack.config]
 server = "exam-platform"
-repo = "freeCodeCamp/exam-platform"
+repo = "ShaunSHamilton/exam-platform"
 branch = "main"
 run_directory = "apps/examiner-dashboard"
 file_paths = ["compose.yaml"]
@@ -76,7 +76,7 @@ description = "wApp: candidate web app, static files behind Caddy"
 tags = ["exam-platform"]
 [stack.config]
 server = "exam-platform"
-repo = "freeCodeCamp/exam-platform"
+repo = "ShaunSHamilton/exam-platform"
 branch = "main"
 run_directory = "apps/web-app"
 file_paths = ["compose.yaml"]

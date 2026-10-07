@@ -32,7 +32,7 @@ doctl compute firewall create --name exam-platform --tag-names exam-platform \
 
 ```bash
 ssh root@<reserved-ip>
-git clone https://github.com/freeCodeCamp/exam-platform.git /opt/exam-platform
+git clone https://github.com/ShaunSHamilton/exam-platform.git /opt/exam-platform
 /opt/exam-platform/deploy/bootstrap.sh
 ```
 
@@ -53,7 +53,7 @@ It prints the Komodo URL and where to read the admin password. Create the DNS re
 4. Settings → Variables: create secret Variables `EXAM_PLATFORM_AUTH_API_SENTRY_DSN`, `EXAM_PLATFORM_CURRICULUM_API_SENTRY_DSN` and `EXAM_PLATFORM_EXAMINER_DASHBOARD_SENTRY_DSN`.
 5. Settings → Users: create service user `exam-platform-ci` and an API key for it. Store the key in GitHub: [Setup](../docs/releases.md#setup).
 6. Syncs → new Resource Sync:
-   - Repository `freeCodeCamp/exam-platform`, branch `main`, resource path `deploy/exam-platform.toml`.
+   - Repository `ShaunSHamilton/exam-platform`, branch `main`, resource path `deploy/exam-platform.toml`.
    - Include user groups on, include variables off, delete off.
    - Execute it. Later edits to the file apply when an admin executes the sync again; it lists pending changes.
 
@@ -131,4 +131,4 @@ Do not:
 - Publish MongoDB, or port 9120 beyond `127.0.0.1`.
 - Remove the `/ws/periphery` block: no remote servers connect.
 
-To log in with GitHub or an OIDC provider instead of passwords, set `KOMODO_GITHUB_OAUTH_*` or `KOMODO_OIDC_*` on the core service. Sign-up stays closed, so users link the provider to an account an admin created.
+Google login: set `KOMODO_GOOGLE_OAUTH_ENABLED=true`, `KOMODO_GOOGLE_OAUTH_ID` and `KOMODO_GOOGLE_OAUTH_SECRET` in `.env`, then `docker compose up -d core`. The Google Cloud OAuth client (web application) needs redirect URI `https://<KOMODO_DOMAIN>/auth/google/callback`. Sign-up stays closed, so users link Google to an account an admin created. GitHub or OIDC work the same way with `KOMODO_GITHUB_OAUTH_*` or `KOMODO_OIDC_*` on the core service.

@@ -4,11 +4,11 @@
 # and Caddy). Ubuntu 26.04, as root. Re-run it to update: it fast-forwards main and only fills
 # secrets that are still empty.
 #
-#   git clone https://github.com/freeCodeCamp/exam-platform.git /opt/exam-platform
+#   git clone https://github.com/ShaunSHamilton/exam-platform.git /opt/exam-platform
 #   /opt/exam-platform/deploy/bootstrap.sh
 set -euo pipefail
 
-REPO=https://github.com/freeCodeCamp/exam-platform.git
+REPO=https://github.com/ShaunSHamilton/exam-platform.git
 DIR=/opt/exam-platform
 SECRETS=(KOMODO_INIT_ADMIN_PASSWORD KOMODO_DATABASE_PASSWORD KOMODO_JWT_SECRET KOMODO_WEBHOOK_SECRET)
 

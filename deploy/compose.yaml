@@ -43,6 +43,11 @@ services:
       KOMODO_DISABLE_USER_REGISTRATION: "true"
       KOMODO_MIN_PASSWORD_LENGTH: "16"
       KOMODO_DISABLE_NON_ADMIN_CREATE: "true"
+      # Google login. Registration stays closed: users link Google to an account an admin created.
+      # Redirect URI in Google Cloud: https://<KOMODO_DOMAIN>/auth/google/callback.
+      KOMODO_GOOGLE_OAUTH_ENABLED: ${KOMODO_GOOGLE_OAUTH_ENABLED:-false}
+      KOMODO_GOOGLE_OAUTH_ID: ${KOMODO_GOOGLE_OAUTH_ID:-}
+      KOMODO_GOOGLE_OAUTH_SECRET: ${KOMODO_GOOGLE_OAUTH_SECRET:-}
       KOMODO_CORS_ALLOWED_ORIGINS: https://${KOMODO_DOMAIN}
       # The co-located Periphery: the server the stacks in exam-platform.toml target.
       KOMODO_FIRST_SERVER_NAME: exam-platform
