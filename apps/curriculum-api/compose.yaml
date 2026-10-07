@@ -1,0 +1,24 @@
+# Run from this directory: `docker compose up --build`. Build context is the repo root.
+# Services address each other over the shared `platform` network; create it once with
+# `docker network create platform`.
+services:
+  curriculum-api:
+    build:
+      context: ../..
+      dockerfile: apps/curriculum-api/Dockerfile
+    restart: unless-stopped
+    ports: ["127.0.0.1:${CAPI_PORT:-13002}:13002"]
+    environment:
+      LISTEN_ADDR: 0.0.0.0:13002
+      # Required: release images refuse to start without it. staging/production also need SENTRY_DSN.
+      ENVIRONMENT: ${ENVIRONMENT:?set ENVIRONMENT to development, staging or production}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.2}
+      RUST_LOG: ${RUST_LOG:-info}
+    networks:
+      platform:
+        aliases: [curriculum-api]
+networks:
+  platform:
+    name: ${PLATFORM_NETWORK:-platform}
+    external: true
