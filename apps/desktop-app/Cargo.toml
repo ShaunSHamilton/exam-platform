@@ -6,3 +6,6 @@ resolver = "3"
 # File/line frames for symbolicating native panics, without shipping full debug info.
 debug = "line-tables-only"
 split-debuginfo = "packed"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }

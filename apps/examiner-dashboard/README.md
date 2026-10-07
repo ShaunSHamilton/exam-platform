@@ -12,6 +12,7 @@ Where examiners author, review, promote, and moderate.
 One image holds both: the Dockerfile builds `client/` with Bun, `server/` with cargo, and copies `client/dist` to `/app/web`.
 
 ```bash
+cp .env.example .env
 cargo run -p examiner-dashboard
 bun --filter examiner-dashboard-client dev
 docker compose up --build

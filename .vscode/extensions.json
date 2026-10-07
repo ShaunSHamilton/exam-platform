@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "rust-lang.rust-analyzer",
+    "tamasfe.even-better-toml",
+    "fill-labs.dependi",
+    "astro-build.astro-vscode",
+    "tauri-apps.tauri-vscode",
+    "oven.bun-vscode"
+  ]
+}

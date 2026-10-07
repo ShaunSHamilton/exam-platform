@@ -7,10 +7,17 @@ const ENVIRONMENTS = ["development", "staging", "production"];
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
-  if (!ENVIRONMENTS.includes(env.ENVIRONMENT ?? "")) {
+  const environment = env.ENVIRONMENT || "production";
+  if (!ENVIRONMENTS.includes(environment)) {
     throw new Error(
-      `ENVIRONMENT must be one of [${ENVIRONMENTS.join(",")}], found ${env.ENVIRONMENT}.`,
+      `ENVIRONMENT must be one of [${ENVIRONMENTS.join(",")}], found ${environment}.`,
     );
+  }
+  const authApiUrl =
+    env.AUTH_API_URL ||
+    (environment === "development" ? "http://127.0.0.1:13001" : "");
+  if (!authApiUrl) {
+    throw new Error(`AUTH_API_URL is required when ENVIRONMENT=${environment}.`);
   }
 
   return {
@@ -28,8 +35,8 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       __APP_VERSION__: JSON.stringify(env.npm_package_version),
-      __ENVIRONMENT__: JSON.stringify(env.ENVIRONMENT),
-      __AUTH_API_URL__: JSON.stringify(env.AUTH_API_URL),
+      __ENVIRONMENT__: JSON.stringify(environment),
+      __AUTH_API_URL__: JSON.stringify(authApiUrl),
     },
   };
 });
