@@ -108,6 +108,9 @@ jobs:
       sha: ${{ matrix.release.sha }}
     secrets:
       DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      # Environment secrets of `production`, by name: deploy.yml reads them only if passed.
+      KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+      KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
 
   desktop:
     name: desktop-app

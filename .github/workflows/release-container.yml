@@ -25,6 +25,12 @@ on:
       DIGITALOCEAN_ACCESS_TOKEN:
         description: DigitalOcean API token with registry read/write scope
         required: true
+      KOMODO_API_KEY:
+        description: Passed through to deploy.yml; set in environment `production`
+        required: true
+      KOMODO_API_SECRET:
+        description: Passed through to deploy.yml; set in environment `production`
+        required: true
   workflow_dispatch:
     inputs:
       app:
@@ -138,3 +144,6 @@ jobs:
     with:
       app: ${{ inputs.app }}
       image: ${{ needs.image.outputs.image }}
+    secrets:
+      KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+      KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}

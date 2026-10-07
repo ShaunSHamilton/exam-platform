@@ -14,6 +14,13 @@ on:
       image:
         type: string
         required: true
+    # Environment secrets of `production`. A caller must pass them by name: unpassed, they resolve
+    # to empty strings in this workflow.
+    secrets:
+      KOMODO_API_KEY:
+        required: true
+      KOMODO_API_SECRET:
+        required: true
   workflow_dispatch:
     inputs:
       app:
