@@ -9,6 +9,7 @@ Sole holder of cDb credentials and sole writer of cDb. Topology in [`../../docs/
 | Health | `GET /healthz`                          |
 
 ```bash
+cp .env.example .env
 cargo run -p curriculum-api
 docker compose up --build
 ```

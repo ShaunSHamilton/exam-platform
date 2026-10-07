@@ -9,6 +9,7 @@ The candidate's entry surface, and second device to potentially proctor.
 | Output   | `dist/`, static files for any host or CDN |
 
 ```bash
+cp .env.example .env
 bun --filter web-app dev
 bun --filter web-app build
 ```
