@@ -55,7 +55,7 @@ It prints the Komodo URL and where to read the admin password. Create the DNS re
 6. Syncs → new Resource Sync:
    - Repository `ShaunSHamilton/exam-platform`, branch `main`, resource path `deploy/exam-platform.toml`.
    - Include user groups on, include variables off, delete off.
-   - Execute it. Later edits to the file apply when an admin executes the sync again; it lists pending changes.
+   - Execute it twice. The first run creates the Action after the user group, so the group's Execute permission on it only applies on the second; until then, CI's `RunAction` fails with "User does not have required permissions on this Action". Later edits to the file apply when an admin executes the sync again; it lists pending changes.
 
 The first deploy of each app creates its `EXAM_PLATFORM_<APP>_IMAGE` Variables. Until eDd's first deploy, its name answers 502.
 
