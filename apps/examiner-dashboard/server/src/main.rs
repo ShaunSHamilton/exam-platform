@@ -5,8 +5,9 @@ mod routes;
 use runtime::{Exit, ServerConfig};
 
 fn main() -> Exit {
-    let config = match ServerConfig::from_env("127.0.0.1:13003") {
-        Ok(config) => config,
+    let config = ServerConfig::from_env("127.0.0.1:13003");
+    let (config, web_dir) = match config.and_then(|config| Ok((config, app::web_dir()?))) {
+        Ok(loaded) => loaded,
         Err(err) => {
             // Telemetry is not up yet: config decides where it goes.
             eprintln!("{err}");
@@ -17,5 +18,5 @@ fn main() -> Exit {
     // Before the Tokio runtime starts, so every worker thread inherits the Sentry hub.
     let _sentry = runtime::telemetry::init(runtime::release!(), &config.telemetry);
 
-    runtime::serve(config.listen_addr, app::app())
+    runtime::serve(config.listen_addr, app::app(web_dir))
 }
