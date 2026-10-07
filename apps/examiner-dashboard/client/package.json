@@ -1,6 +1,7 @@
 {
   "name": "examiner-dashboard-client",
   "private": true,
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "astro dev --host 127.0.0.1 --port 13005",

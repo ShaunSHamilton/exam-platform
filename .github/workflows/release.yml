@@ -1,0 +1,87 @@
+name: Release
+
+# release-please keeps one release PR per app open (release-please-config.json). Merging one
+# creates the GitHub release here, and the same run builds and deploys it: releases created with
+# GITHUB_TOKEN trigger no other workflows.
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-slim
+    permissions:
+      contents: write # tags, releases, release PR branches
+      issues: write # release PR labels
+      pull-requests: write # open and update release PRs
+    # Release PRs and releases derive from main's state, so a newer queued run can replace an
+    # older one without losing a release.
+    concurrency:
+      group: release-please
+      cancel-in-progress: false
+    outputs:
+      images: ${{ steps.plan.outputs.images }}
+      desktop: ${{ steps.plan.outputs.desktop }}
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: apps
+      # Apps with a Dockerfile ship as images; desktop-app ships Tauri bundles.
+      - id: plan
+        env:
+          OUTPUTS: ${{ toJSON(steps.release.outputs) }}
+        run: |
+          releases=$(jq -c '. as $out | .paths_released | fromjson | map({
+            app: (split("/") | last),
+            version: $out[. + "--version"],
+            tag: $out[. + "--tag_name"],
+            sha: $out[. + "--sha"]
+          })' <<<"$OUTPUTS")
+          docker=$(find apps -mindepth 2 -maxdepth 2 -name Dockerfile | cut -d/ -f2 | jq -Rnc '[inputs]')
+          echo "images=$(jq -c --argjson docker "$docker" 'map(select(.app | IN($docker[])))' <<<"$releases")" >> "$GITHUB_OUTPUT"
+          echo "desktop=$(jq -c 'map(select(.app == "desktop-app"))' <<<"$releases")" >> "$GITHUB_OUTPUT"
+
+  container:
+    name: ${{ matrix.release.app }} ${{ matrix.release.version }}
+    needs: release-please
+    if: needs.release-please.outputs.images != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ${{ fromJSON(needs.release-please.outputs.images) }}
+    # Ceiling for release-container.yml's jobs.
+    permissions:
+      contents: write # record the digest in the release notes
+      id-token: write # sign the provenance attestation
+      attestations: write # store the provenance attestation
+    uses: $/.github/workflows/release-container.yml
+    with:
+      app: ${{ matrix.release.app }}
+      version: ${{ matrix.release.version }}
+      tag: ${{ matrix.release.tag }}
+      sha: ${{ matrix.release.sha }}
+    secrets:
+      DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+  desktop:
+    name: desktop-app
+    needs: release-please
+    if: needs.release-please.outputs.desktop != '[]'
+    runs-on: ubuntu-slim
+    permissions: {}
+    steps:
+      # Stub: build the Tauri bundles at `sha` and attach them to the release `tag`.
+      - env:
+          RELEASE: ${{ needs.release-please.outputs.desktop }}
+        run: |
+          jq -r '.[0] | "::notice::desktop-app \(.version) released as \(.tag); no Tauri bundles are built yet."' <<<"$RELEASE"

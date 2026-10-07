@@ -1,0 +1,14 @@
+# Komodo's public face: TLS, and only the two calls GitHub Actions makes (.github/workflows/deploy.yml).
+# Operators reach the UI through an SSH tunnel to 127.0.0.1:9120 (README.md).
+{$KOMODO_DOMAIN} {
+	@ci {
+		method POST
+		path /execute/RunAction /read/GetUpdate
+	}
+	handle @ci {
+		reverse_proxy core:9120
+	}
+	handle {
+		respond 404
+	}
+}

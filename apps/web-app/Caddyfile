@@ -1,0 +1,27 @@
+# Serves the static build. Plain HTTP: TLS terminates in front of the container.
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:13004 {
+	handle /healthz {
+		header Cache-Control no-store
+		respond "ok"
+	}
+
+	handle {
+		root * /srv
+		encode zstd gzip
+		# Content-hashed by Astro: safe to cache forever.
+		header /_astro/* Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	handle_errors 404 {
+		root * /srv
+		rewrite * /404.html
+		file_server
+	}
+}

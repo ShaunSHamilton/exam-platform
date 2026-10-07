@@ -1,0 +1,19 @@
+# Run from this directory: `docker compose up --build`. Build context is the repo root.
+# Services address each other over the shared `platform` network; create it once with
+# `docker network create platform`.
+services:
+  web-app:
+    build:
+      context: ../..
+      dockerfile: apps/web-app/Dockerfile
+      args:
+        PUBLIC_AUTH_API_URL: ${PUBLIC_AUTH_API_URL:-http://127.0.0.1:13001}
+    restart: unless-stopped
+    ports: ["127.0.0.1:${WAPP_PORT:-13004}:13004"]
+    networks:
+      platform:
+        aliases: [web-app]
+networks:
+  platform:
+    name: ${PLATFORM_NETWORK:-platform}
+    external: true

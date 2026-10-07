@@ -1,0 +1,96 @@
+name: Deploy
+
+# Runs Komodo's exam-platform-deploy Action (deploy/komodo/exam-platform.toml): points the app's
+# stack at one image digest, keeps the digest it replaces, and rolls back if containers do not
+# turn healthy. Called after each release (release-container.yml); dispatch by hand to redeploy
+# a release's image or roll back with `previous`.
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        type: string
+        required: true
+      image:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      app:
+        description: App
+        type: choice
+        options: [auth-api, curriculum-api, examiner-dashboard, web-app]
+        required: true
+      image:
+        description: "`registry.digitalocean.com/<registry>/<app>@sha256:<digest>` from a release's notes, or `previous` to roll back"
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.app }}
+    runs-on: ubuntu-slim
+    permissions: {}
+    # Required reviewers on this environment gate every deploy.
+    environment: production
+    # Komodo fails a deploy that overlaps another on the same stack: one at a time per app. A newer
+    # pending deploy supersedes an older pending one.
+    concurrency:
+      group: deploy-production-${{ inputs.app }}
+      cancel-in-progress: false
+    steps:
+      - name: Deploy through Komodo
+        env:
+          APP: ${{ inputs.app }}
+          IMAGE: ${{ inputs.image }}
+          KOMODO_URL: ${{ vars.KOMODO_URL }}
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+        run: |
+          set -euo pipefail
+          digest="^registry\.digitalocean\.com/[a-z0-9-]+/$APP@sha256:[0-9a-f]{64}$"
+          if [[ $IMAGE != previous && ! $IMAGE =~ $digest ]]; then
+            echo "::error::image must be registry.digitalocean.com/<registry>/$APP@sha256:<digest>, or previous"
+            exit 1
+          fi
+
+          # komodo <path> <json> [curl options]
+          komodo() {
+            curl --fail-with-body --silent --show-error --max-time 30 "${@:3}" \
+              --header "X-Api-Key: $KOMODO_API_KEY" --header "X-Api-Secret: $KOMODO_API_SECRET" \
+              --header 'Content-Type: application/json' --data "$2" "${KOMODO_URL%/}$1"
+          }
+
+          run=$(jq -nc --arg app "$APP" --arg image "$IMAGE" \
+            '{action: "exam-platform-deploy", args: {APP: $app, IMAGE: $image}}')
+          # No retry: a repeat would start a second deploy.
+          if ! started=$(komodo /execute/RunAction "$run"); then
+            echo "::error::Komodo rejected RunAction: $started"
+            exit 1
+          fi
+          id=$(jq -er '._id."$oid"' <<<"$started")
+          echo "Komodo update $id"
+
+          # A rollout and its rollback each wait up to 120s for healthy containers.
+          deadline=$((SECONDS + 1200))
+          while :; do
+            update=$(komodo /read/GetUpdate "$(jq -nc --arg id "$id" '{id: $id}')" --retry 3)
+            [[ $(jq -r .status <<<"$update") == Complete ]] && break
+            if ((SECONDS > deadline)); then
+              echo "::error::Timed out waiting for Komodo update $id"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          # Komodo's output must not run workflow commands.
+          stop=$(openssl rand -hex 16)
+          echo "::stop-commands::$stop"
+          jq -r '.logs[] | "--- \(.stage)\n\(.stdout)\(.stderr)"' <<<"$update"
+          echo "::$stop::"
+          if ! jq -e .success <<<"$update" >/dev/null; then
+            echo "::error::Deploy failed: see the Komodo log above (update $id)"
+            exit 1
+          fi

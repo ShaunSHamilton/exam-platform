@@ -3,7 +3,7 @@
 
 use std::process::ExitCode;
 
-use runtime::{telemetry::DEFAULT_TRACES_SAMPLE_RATE, Exit, Telemetry};
+use runtime::{Exit, Telemetry, telemetry::DEFAULT_TRACES_SAMPLE_RATE};
 
 fn main() -> ExitCode {
     let telemetry = match env!("ENVIRONMENT").parse().and_then(|environment| {

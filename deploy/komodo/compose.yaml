@@ -1,0 +1,90 @@
+# Komodo on the app VM: MongoDB, Core, Periphery, and Caddy for TLS. Adapted from Komodo's
+# compose/mongo.compose.yaml (v2.3.3). Install, setup and maintenance: README.md.
+#
+# Run by hand from this directory, never as a Komodo stack: redeploying Core from Core cuts
+# off the deploy halfway. Secrets come from .env (see .env.example), which stays on the VM.
+name: komodo
+
+services:
+  mongo:
+    # 8.0, not 9: Komodo 2.3.3 builds against mongodb driver 3.7, which predates server 9.0.
+    image: mongo:8.0
+    labels:
+      komodo.skip: # StopAllContainers leaves it running; Core and Periphery images carry it
+    command: --quiet --wiredTigerCacheSizeGB 0.25
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${KOMODO_DATABASE_USERNAME:?set in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${KOMODO_DATABASE_PASSWORD:?set in .env}
+
+  core:
+    image: ghcr.io/moghtech/komodo-core:2.3.3
+    init: true
+    restart: unless-stopped
+    depends_on: [mongo]
+    # The UI is reached through an SSH tunnel; Caddy is the only public entry.
+    ports: ["127.0.0.1:9120:9120"]
+    environment:
+      KOMODO_HOST: https://${KOMODO_DOMAIN:?set in .env}
+      KOMODO_TITLE: Exam Platform
+      KOMODO_DATABASE_ADDRESS: mongo:27017
+      KOMODO_DATABASE_USERNAME: ${KOMODO_DATABASE_USERNAME}
+      KOMODO_DATABASE_PASSWORD: ${KOMODO_DATABASE_PASSWORD}
+      KOMODO_JWT_SECRET: ${KOMODO_JWT_SECRET:?set in .env}
+      KOMODO_WEBHOOK_SECRET: ${KOMODO_WEBHOOK_SECRET:?set in .env}
+      # The first account to sign up becomes super admin. Later sign-ups stay disabled until an
+      # admin enables them, and only the SSH tunnel reaches the form.
+      KOMODO_LOCAL_AUTH: "true"
+      KOMODO_ENABLE_NEW_USERS: "false"
+      KOMODO_DISABLE_NON_ADMIN_CREATE: "true"
+      # The co-located Periphery: the server the stacks in exam-platform.toml target.
+      KOMODO_FIRST_SERVER_NAME: exam-platform
+      KOMODO_PERIPHERY_PUBLIC_KEY: file:/config/keys/periphery.pub
+      TZ: Etc/UTC
+    volumes:
+      - keys:/config/keys
+      # Daily "Backup Core Database" procedure; keeps the newest 14.
+      - /etc/komodo/backups:/backups
+
+  periphery:
+    image: ghcr.io/moghtech/komodo-periphery:2.3.3
+    init: true
+    restart: unless-stopped
+    depends_on: [core]
+    environment:
+      PERIPHERY_CORE_ADDRESS: ws://core:9120
+      PERIPHERY_CONNECT_AS: exam-platform
+      PERIPHERY_CORE_PUBLIC_KEYS: file:/config/keys/core.pub
+      PERIPHERY_ROOT_DIRECTORY: /etc/komodo
+      PERIPHERY_INCLUDE_DISK_MOUNTS: /etc/hostname
+      TZ: Etc/UTC
+    volumes:
+      - keys:/config/keys
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc:/proc
+      # Stacks clone here. Same path inside and outside: compose runs against the host's Docker.
+      - /etc/komodo:/etc/komodo
+
+  caddy:
+    image: caddy:2.11.7-alpine
+    labels:
+      komodo.skip:
+    restart: unless-stopped
+    depends_on: [core]
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      KOMODO_DOMAIN: ${KOMODO_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  mongo-data:
+  mongo-config:
+  keys:
+  caddy-data:
+  caddy-config:

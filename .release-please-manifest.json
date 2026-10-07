@@ -1,0 +1,7 @@
+{
+  "apps/auth-api": "0.0.0",
+  "apps/curriculum-api": "0.0.0",
+  "apps/examiner-dashboard": "0.0.0",
+  "apps/web-app": "0.0.0",
+  "apps/desktop-app": "0.0.0"
+}

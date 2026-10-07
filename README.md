@@ -8,6 +8,7 @@ bun run dev                     # web-app (13004) + examiner-dashboard client (1
 bun run dev:desktop             # desktop-app via tauri dev
 bun run check                   # astro check / tsc -b in every Bun workspace member
 bun run build
+bun run inputs                  # rewrite apps/*/inputs.lock after shared changes; CI checks them
 
 cargo run -p auth-api           # 13001
 cargo run -p curriculum-api     # 13002
@@ -34,9 +35,12 @@ databases/
   | curriculum/
   | examiner/
   | moderation/
+deploy/
+  | komodo/ # Komodo on the app VM (compose, Caddy) and its Resource Sync
 docs/ # mdbook docs
 libs/ # Common across one or more applications
   | runtime/ # env config, tracing + Sentry, Axum serving + graceful shutdown, exit codes
+scripts/ # repo tooling
 ```
 
-Docker: build context is the repo root for every image. See each app's `compose.yaml`.
+Docker: build context is the repo root for every image. See each app's `compose.yaml`; `compose.deploy.yaml` is what Komodo deploys. Releases and deploys: [`docs/releases.md`](docs/releases.md).

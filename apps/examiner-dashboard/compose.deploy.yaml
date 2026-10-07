@@ -1,0 +1,23 @@
+# Deployment variant of compose.yaml: Komodo stack `exam-platform-examiner-dashboard` (deploy/komodo/exam-platform.toml)
+# runs the released image by digest instead of building. Komodo writes the stack environment to
+# the env file compose interpolates. IMAGE is the release's digest, set per deploy; secrets come
+# from Komodo, never this repository.
+services:
+  examiner-dashboard:
+    image: ${IMAGE:?set IMAGE to registry.digitalocean.com/<registry>/examiner-dashboard@sha256:<digest>}
+    restart: unless-stopped
+    ports: ["127.0.0.1:${EDD_PORT:-13003}:13003"]
+    environment:
+      LISTEN_ADDR: 0.0.0.0:13003
+      ENVIRONMENT: ${ENVIRONMENT:?set ENVIRONMENT to staging or production}
+      SENTRY_DSN: ${SENTRY_DSN:?set SENTRY_DSN}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.2}
+      RUST_LOG: ${RUST_LOG:-info}
+      WEB_DIR: /app/web
+    networks:
+      platform:
+        aliases: [examiner-dashboard]
+networks:
+  platform:
+    name: ${PLATFORM_NETWORK:?set PLATFORM_NETWORK to the environment's shared network}
+    external: true

@@ -30,6 +30,7 @@
     "dev": "bun --filter web-app --filter examiner-dashboard-client dev",
     "dev:desktop": "bun --filter desktop-app tauri:dev",
     "build": "bun --filter '*' build",
-    "check": "bun --filter '*' check"
+    "check": "bun --filter '*' check",
+    "inputs": "bun scripts/inputs.ts"
   }
 }

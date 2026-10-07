@@ -1,0 +1,193 @@
+# Komodo Resource Sync for the exam platform's single environment. Setup: docs/releases.md.
+#
+# Sync settings: this file on `main`, include_user_groups = true, include_variables = false.
+# Variables stay out of the sync: the deploy Action moves EXAM_PLATFORM_*_IMAGE on every deploy,
+# and secrets are created by hand in Komodo, so a sync would revert or blank them.
+#
+# Stacks pull compose.deploy.yaml from `main` and only deploy when GitHub Actions runs the
+# exam-platform-deploy Action: `deploy = false`, no webhooks, no polling.
+
+[[stack]]
+name = "exam-platform-auth-api"
+description = "aAPI: candidate identity and the attempt path"
+tags = ["exam-platform"]
+[stack.config]
+server = "exam-platform"
+repo = "freeCodeCamp/exam-platform"
+branch = "main"
+run_directory = "apps/auth-api"
+file_paths = ["compose.deploy.yaml"]
+registry_provider = "registry.digitalocean.com"
+registry_account = "exam-platform"
+pre_deploy.command = "docker network inspect exam-platform-production >/dev/null 2>&1 || docker network create exam-platform-production"
+# Fails the deploy, and so triggers the Action's rollback, unless every container turns healthy.
+extra_args = ["--wait", "--wait-timeout", "120"]
+environment = """
+IMAGE=[[EXAM_PLATFORM_AUTH_API_IMAGE]]
+ENVIRONMENT=production
+SENTRY_DSN=[[EXAM_PLATFORM_AUTH_API_SENTRY_DSN]]
+PLATFORM_NETWORK=exam-platform-production
+"""
+
+[[stack]]
+name = "exam-platform-curriculum-api"
+description = "cAPI: sole holder of cDb credentials"
+tags = ["exam-platform"]
+[stack.config]
+server = "exam-platform"
+repo = "freeCodeCamp/exam-platform"
+branch = "main"
+run_directory = "apps/curriculum-api"
+file_paths = ["compose.deploy.yaml"]
+registry_provider = "registry.digitalocean.com"
+registry_account = "exam-platform"
+pre_deploy.command = "docker network inspect exam-platform-production >/dev/null 2>&1 || docker network create exam-platform-production"
+extra_args = ["--wait", "--wait-timeout", "120"]
+environment = """
+IMAGE=[[EXAM_PLATFORM_CURRICULUM_API_IMAGE]]
+ENVIRONMENT=production
+SENTRY_DSN=[[EXAM_PLATFORM_CURRICULUM_API_SENTRY_DSN]]
+PLATFORM_NETWORK=exam-platform-production
+"""
+
+[[stack]]
+name = "exam-platform-examiner-dashboard"
+description = "eDd: examiner authoring, review, promotion and moderation"
+tags = ["exam-platform"]
+[stack.config]
+server = "exam-platform"
+repo = "freeCodeCamp/exam-platform"
+branch = "main"
+run_directory = "apps/examiner-dashboard"
+file_paths = ["compose.deploy.yaml"]
+registry_provider = "registry.digitalocean.com"
+registry_account = "exam-platform"
+pre_deploy.command = "docker network inspect exam-platform-production >/dev/null 2>&1 || docker network create exam-platform-production"
+extra_args = ["--wait", "--wait-timeout", "120"]
+environment = """
+IMAGE=[[EXAM_PLATFORM_EXAMINER_DASHBOARD_IMAGE]]
+ENVIRONMENT=production
+SENTRY_DSN=[[EXAM_PLATFORM_EXAMINER_DASHBOARD_SENTRY_DSN]]
+PLATFORM_NETWORK=exam-platform-production
+"""
+
+[[stack]]
+name = "exam-platform-web-app"
+description = "wApp: candidate web app, static files behind Caddy"
+tags = ["exam-platform"]
+[stack.config]
+server = "exam-platform"
+repo = "freeCodeCamp/exam-platform"
+branch = "main"
+run_directory = "apps/web-app"
+file_paths = ["compose.deploy.yaml"]
+registry_provider = "registry.digitalocean.com"
+registry_account = "exam-platform"
+pre_deploy.command = "docker network inspect exam-platform-production >/dev/null 2>&1 || docker network create exam-platform-production"
+extra_args = ["--wait", "--wait-timeout", "120"]
+environment = """
+IMAGE=[[EXAM_PLATFORM_WEB_APP_IMAGE]]
+PLATFORM_NETWORK=exam-platform-production
+"""
+
+[[action]]
+name = "exam-platform-deploy"
+description = "Deploys an exam-platform app by image digest. Run by GitHub Actions (.github/workflows/deploy.yml)."
+tags = ["exam-platform"]
+[action.config]
+arguments = """
+APP=
+IMAGE=
+"""
+# Komodo interpolates variables into this script, so it must never contain two opening brackets in a row.
+file_contents = '''
+// Deploys one app by image digest and keeps the digest it replaces, for rollback. ARGS:
+//   APP    auth-api | curriculum-api | examiner-dashboard | web-app
+//   IMAGE  registry.digitalocean.com/<registry>/<APP>@sha256:<digest>, or `previous`
+// Only admins may write Variables. The Action user is one, so CI needs Execute on this Action only.
+// Komodo interpolates ARGS before the script runs: never echo them unvalidated.
+const APPS = ["auth-api", "curriculum-api", "examiner-dashboard", "web-app"];
+const app = String(ARGS.APP);
+if (!APPS.includes(app)) throw new Error(`APP must be one of ${APPS.join(", ")}`);
+
+const stack = `exam-platform-${app}`;
+const current = `EXAM_PLATFORM_${app.toUpperCase().replaceAll("-", "_")}_IMAGE`;
+const previous = `${current}_PREVIOUS`;
+
+// Komodo answers a missing Variable with an error.
+async function get(name: string): Promise<string | undefined> {
+  try {
+    return (await komodo.read("GetVariable", { name })).value;
+  } catch {
+    return undefined;
+  }
+}
+
+async function set(name: string, value: string) {
+  if ((await get(name)) === undefined) {
+    const description = `Image ${stack} runs. Written by the exam-platform-deploy Action.`;
+    await komodo.write("CreateVariable", { name, value, description });
+  } else {
+    await komodo.write("UpdateVariableValue", { name, value });
+  }
+}
+
+async function deploy(image: string): Promise<boolean> {
+  await set(current, image);
+  const update = (await komodo.execute_and_poll("DeployStack", { stack })) as Types.Update;
+  for (const log of update.logs) {
+    if (!log.success) console.error(`${log.stage}:\n${log.stderr || log.stdout}`);
+  }
+  return update.success;
+}
+
+const requested = String(ARGS.IMAGE);
+const image = requested === "previous" ? await get(previous) : requested;
+if (requested === "previous" && !image) throw new Error(`No previous image recorded for ${stack}`);
+const digest = new RegExp(`^registry\\.digitalocean\\.com/[a-z0-9-]+/${app}@sha256:[0-9a-f]{64}$`);
+if (!image || !digest.test(image)) {
+  throw new Error(`IMAGE must be registry.digitalocean.com/<registry>/${app}@sha256:<digest>, or previous`);
+}
+if ((await komodo.read("GetStackActionState", { stack })).deploying) {
+  throw new Error(`${stack} is already deploying`);
+}
+
+const deployed = (await get(current)) || undefined;
+if (await deploy(image)) {
+  if (deployed && deployed !== image) await set(previous, deployed);
+  console.log(`${stack} runs ${image}`);
+} else if (deployed && deployed !== image) {
+  const restored = await deploy(deployed);
+  throw new Error(
+    restored
+      ? `Deploy failed: ${stack} rolled back to ${deployed}`
+      : `Deploy and rollback failed: ${stack} needs attention`,
+  );
+} else {
+  throw new Error(`Deploy failed: ${stack} had no earlier image to roll back to`);
+}
+'''
+
+# Every deploy pulls a new digest, so old images pile up. `docker image prune -a` keeps the images
+# that containers use; a rollback pulls its image from DOCR again.
+[[procedure]]
+name = "exam-platform-prune-images"
+description = "Removes Docker images that no container uses."
+tags = ["exam-platform"]
+[procedure.config]
+schedule = "Every Sunday at 03:00"
+schedule_timezone = "UTC"
+schedule_alert = false
+[[procedure.config.stage]]
+name = "Prune images"
+executions = [
+  { execution.type = "PruneImages", execution.params.server = "exam-platform" },
+]
+
+# Holds the service user whose API key GitHub Actions uses (KOMODO_API_KEY / KOMODO_API_SECRET).
+[[user_group]]
+name = "exam-platform-ci"
+users = ["exam-platform-ci"]
+permissions = [
+  { target.type = "Action", target.id = "exam-platform-deploy", level = "Execute" },
+]

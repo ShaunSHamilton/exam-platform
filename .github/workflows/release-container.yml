@@ -1,0 +1,117 @@
+name: Release container
+
+# One released container app: build at the release commit, push to DOCR, record the digest, then
+# deploy that exact digest. Called per app by release.yml.
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      tag:
+        description: Git tag of the GitHub release
+        type: string
+        required: true
+      sha:
+        description: Release commit
+        type: string
+        required: true
+    secrets:
+      DIGITALOCEAN_ACCESS_TOKEN:
+        description: DigitalOcean API token with registry read/write scope
+        required: true
+
+permissions: {}
+
+jobs:
+  image:
+    name: Image
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write # record the digest in the release notes
+      id-token: write # sign the provenance attestation
+      attestations: write # store the provenance attestation
+    outputs:
+      image: ${{ steps.record.outputs.image }}
+    env:
+      REPOSITORY: registry.digitalocean.com/${{ vars.DOCR_REGISTRY }}/${{ inputs.app }}
+    steps:
+      - name: Check configuration
+        env:
+          APP: ${{ inputs.app }}
+          DOCR_REGISTRY: ${{ vars.DOCR_REGISTRY }}
+          PUBLIC_AUTH_API_URL: ${{ vars.PUBLIC_AUTH_API_URL }}
+        run: |
+          if [[ -z $DOCR_REGISTRY ]]; then
+            echo "::error::Set the DOCR_REGISTRY repository variable"
+            exit 1
+          fi
+          if [[ $APP == web-app && -z $PUBLIC_AUTH_API_URL ]]; then
+            echo "::error::Set the PUBLIC_AUTH_API_URL repository variable: web-app bakes it in"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      # DigitalOcean's CI login: the API token as both username and password.
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: registry.digitalocean.com
+          username: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          password: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        id: meta
+        with:
+          context: git
+          images: ${{ env.REPOSITORY }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ inputs.version }}
+            type=sha,format=long
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: build
+        with:
+          context: .
+          file: apps/${{ inputs.app }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ inputs.app == 'web-app' && format('PUBLIC_AUTH_API_URL={0}', vars.PUBLIC_AUTH_API_URL) || '' }}
+          # A single-manifest image; its provenance is the GitHub attestation below.
+          provenance: false
+          cache-from: type=gha,scope=${{ inputs.app }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.app }}
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.REPOSITORY }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+      - id: record
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          IMAGE: ${{ env.REPOSITORY }}@${{ steps.build.outputs.digest }}
+          TAG: ${{ inputs.tag }}
+          # Drops the line an earlier attempt wrote: a rebuild is a new digest.
+          WITHOUT_IMAGE: '.body | sub("(\n*[*][*]Image:[*][*] `[^`]*`)?\\s*$"; "")'
+        run: |
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "Pushed \`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
+          notes="$RUNNER_TEMP/notes.md"
+          gh release view "$TAG" --json body --jq "$WITHOUT_IMAGE" > "$notes"
+          printf '\n**Image:** %s\n' "\`$IMAGE\`" >> "$notes"
+          gh release edit "$TAG" --notes-file "$notes"
+
+  deploy:
+    name: Deploy
+    needs: image
+    permissions: {}
+    uses: $/.github/workflows/deploy.yml
+    with:
+      app: ${{ inputs.app }}
+      image: ${{ needs.image.outputs.image }}

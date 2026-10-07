@@ -15,3 +15,4 @@
 - ability to delete branches
 - separate branch management from change requests
   - promoting dev -> stg -> prd should be its own thing
+- use GitHub naming for familiarity
