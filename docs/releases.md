@@ -50,6 +50,8 @@ release-please gives a package the commits that touch files under its path. Each
 2. Per released image app, [`release-container.yml`](../.github/workflows/release-container.yml) checks out the release commit and builds the existing repo-root Docker context. It pushes `registry.digitalocean.com/<DOCR_REGISTRY>/<app>:<version>` and `:sha-<commit>`, attests build provenance, and appends `**Image:** <repository>@sha256:…` to the release notes.
 3. [`deploy.yml`](../.github/workflows/deploy.yml) waits for `production` approval, then runs Komodo's deploy Action with that digest. Deploys of one app run one at a time; a newer pending deploy supersedes an older one.
 
+A release whose image job failed is not built again by later pushes, and a re-run reuses that run's workflow files. Once fixed on `main`, run Actions → Release container with the app, version, tag and release commit: `gh workflow run release-container.yml -f app=<app> -f version=<version> -f tag=<tag> -f sha=$(git rev-list -n 1 <tag>)`.
+
 ## Deploy
 
 Production is one DigitalOcean Droplet running Komodo, Caddy and the app stacks ([`deploy/README.md`](../deploy/README.md)). [`deploy/exam-platform.toml`](../deploy/exam-platform.toml) is Komodo's Resource Sync:
